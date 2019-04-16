@@ -11,8 +11,11 @@ Install
 Install GOTK3 library first
 https://github.com/gotk3/gotk3/wiki
 
+and after a simple go get...
+
 ```bash
 $ go get -u github.com/ryosama/go-todo
+```
 
 Screenshot
 ===========
