@@ -17,7 +17,7 @@ $ go get -u github.com/ryosama/go-todo
 Screenshot
 ===========
 
-![Screenshot](https://github.com/ryosama/go-todo/raw/master/screenshot.jpg "Screenshot")
+![Screenshot](https://raw.githubusercontent.com/ryosama/go-todo/master/screenshot.jpg "Screenshot")
 
 
 Documentation
