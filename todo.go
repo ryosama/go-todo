@@ -3,9 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	//"github.com/davecgh/go-spew/spew"
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/gtk"
-	//"github.com/davecgh/go-spew/spew"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -39,7 +39,12 @@ const css = `
 	text-decoration:line-through;
 	font-weight:normal;
 }
-.notdone {
+
+.beingEdited {
+	background-color:lightgrey;
+}
+
+entry {
 	color:black;
 	text-decoration:none;
 	font-weight:bold;
@@ -70,7 +75,6 @@ func main() {
 	win.SetTitle(config.CurrentList)
 
 	drawInterface()
-	loadEvents()
 
 	// load entries style
 	screen, _ := gdk.ScreenGetDefault()
@@ -90,6 +94,22 @@ func main() {
 	}
 	win.SetDefaultSize(config.Width, config.Height)
 	win.Move(config.Left, config.Top)
+
+	// events
+	entry.Connect("activate", func() {
+		s, _ := entry.GetText()
+		fmt.Printf("DEBUG : Add item '%s'\n", s)
+		todoList = append(todoList, &Todo{Text: s, Done: false})
+		addItemToListbox(len(todoList) - 1)
+		entry.SetText("")
+	})
+
+	// Window events
+	win.Connect("destroy", func() {
+		saveConfig()
+		saveTodoList()
+		gtk.MainQuit()
+	})
 
 	// Recursively show all widgets contained in this window.
 	win.ShowAll()
@@ -114,8 +134,16 @@ func addItemToListbox(id int) {
 	btn_delete.SetImage(deleteIcon)
 	btn_delete.SetName("Delete_" + id_string)
 	btn_delete.SetTooltipText("Delete this thing")
-	btn_delete.SetMarginEnd(5)
-	//registerWidget(btn_delete)
+	btn_delete.SetMarginEnd(2)
+
+	// create a delete button
+	editIcon, _ := gtk.ImageNew()
+	editIcon.SetFromIconName("accessories-text-editor", gtk.ICON_SIZE_LARGE_TOOLBAR)
+	btn_edit, _ := gtk.ButtonNew()
+	btn_edit.SetImage(editIcon)
+	btn_edit.SetName("Edit_" + id_string)
+	btn_edit.SetTooltipText("Edit this thing")
+	btn_edit.SetMarginEnd(5)
 
 	// create a check button
 	checkbutton, _ := gtk.CheckButtonNew()
@@ -123,57 +151,31 @@ func addItemToListbox(id int) {
 	checkbutton.SetTooltipText("Check as done")
 	checkbutton.SetName("Check_" + id_string)
 	checkbutton.SetMarginEnd(5)
-	//registerWidget(checkbutton)
 
 	// create an entry
 	entry, _ := gtk.EntryNew()
 	entry.SetText(todoList[id].Text)
 	entry.SetName("Entry_" + id_string)
+	entry.SetEditable(false)
 	registerWidget(entry) // to use getWidgetByName(string) later
 
 	// add style to entry
-	styleContext, _ := entry.GetStyleContext()
-	if todoList[id].Done {
-		styleContext.RemoveClass("notdone")
-		styleContext.AddClass("done")
-	} else {
-		styleContext.RemoveClass("done")
-		styleContext.AddClass("notdone")
-	}
+	chooseClassDone(entry, todoList[id].Done)
 
+	// add elemenbt to line
 	boxContainer.Add(btn_delete)
+	boxContainer.Add(btn_edit)
 	boxContainer.Add(checkbutton)
 	boxContainer.PackEnd(entry, true, true, 0)
 
+	// add line to list row
 	item.Add(boxContainer)
 
+	// add list row to listbox and display it
 	listbox.Insert(item, -1)
 	listbox.ShowAll()
 
-	entry.Connect("key-press-event", func(elm *gtk.Entry) {
-		elm_name, _ := elm.GetName()
-		id, _ := strconv.Atoi(strings.Split(elm_name, "_")[1])
-		s, _ := elm.GetText()
-		todoList[id].Text = s
-	})
-
-	checkbutton.Connect("clicked", func(elm *gtk.CheckButton) {
-		elm_name, _ := elm.GetName()
-		id, _ := strconv.Atoi(strings.Split(elm_name, "_")[1])
-		todoList[id].Done = !todoList[id].Done
-
-		// invert style
-		widget, _ := getWidgetByName("Entry_" + strconv.Itoa(id))
-		styleContext, _ := widget.GetStyleContext()
-		if todoList[id].Done {
-			styleContext.RemoveClass("notdone")
-			styleContext.AddClass("done")
-		} else {
-			styleContext.RemoveClass("done")
-			styleContext.AddClass("notdone")
-		}
-	})
-
+	// events
 	btn_delete.Connect("clicked", func(elm *gtk.Button) {
 		elm_name, _ := elm.GetName()
 		id, _ := strconv.Atoi(strings.Split(elm_name, "_")[1])
@@ -182,24 +184,40 @@ func addItemToListbox(id int) {
 		clearListGui()
 		buildListGui()
 	})
-}
 
-func loadEvents() {
-	// widget events
-
-	entry.Connect("activate", func() {
-		s, _ := entry.GetText()
-		fmt.Printf("DEBUG : Add item '%s'\n", s)
-		todoList = append(todoList, &Todo{Text: s, Done: false})
-		addItemToListbox(len(todoList) - 1)
-		entry.SetText("")
+	btn_edit.Connect("clicked", func(elm *gtk.Button) {
+		elm_name, _ := elm.GetName()
+		id, _ := strconv.Atoi(strings.Split(elm_name, "_")[1])
+		fmt.Printf("DEBUG : Edit element %d\n", id)
+		widget, _ := getWidgetByName("Entry_" + strconv.Itoa(id))
+		widget.(*gtk.Entry).SetEditable(true)
+		chooseClassBeingEdited(widget.(*gtk.Entry), true)
 	})
 
-	// Window events
-	win.Connect("destroy", func() {
-		saveConfig()
-		saveTodoList()
-		gtk.MainQuit()
+	checkbutton.Connect("clicked", func(elm *gtk.CheckButton) {
+		elm_name, _ := elm.GetName()
+		id, _ := strconv.Atoi(strings.Split(elm_name, "_")[1])
+		todoList[id].Done = !todoList[id].Done
+		fmt.Printf("DEBUG : Invert status of %d\n", id)
+
+		// invert style
+		widget, _ := getWidgetByName("Entry_" + strconv.Itoa(id))
+		chooseClassDone(widget.(*gtk.Entry), todoList[id].Done)
+	})
+
+	entry.Connect("key-press-event", func(elm *gtk.Entry, event *gdk.Event) {
+		//spew.Dump(event)
+		eventKey := gdk.EventKeyNewFromEvent(event)
+		key := eventKey.KeyVal()
+
+		if key == 65293 { // ENTER
+			elm_name, _ := elm.GetName()
+			id, _ := strconv.Atoi(strings.Split(elm_name, "_")[1])
+			s, _ := elm.GetText()
+			todoList[id].Text = s
+			elm.SetEditable(false)
+			chooseClassBeingEdited(elm, false)
+		}
 	})
 }
 
@@ -275,16 +293,15 @@ func readTodoList() {
 	if _, err := os.Stat(config.CurrentList); err == nil {
 		file, _ := ioutil.ReadFile(config.CurrentList)
 		json.Unmarshal([]byte(file), &todoList)
-		fmt.Printf("DEBUG : read config file\n")
+		fmt.Printf("DEBUG : read todo list\n")
 	}
 
 	// for debug
-	/*	todoList = nil
-		todoList = append(todoList, &Todo{Text: "Ceci est un texte d'exemple", Done: true})
-		todoList = append(todoList, &Todo{Text: "Ceci est un 2eme exemple", Done: false})
-		todoList = append(todoList, &Todo{Text: "Ceci est un 3eme exemple", Done: true})
+	/*todoList = nil
+	todoList = append(todoList, &Todo{Text: "Ceci est un texte d'exemple", Done: true})
+	todoList = append(todoList, &Todo{Text: "Ceci est un 2eme exemple", Done: false})
+	todoList = append(todoList, &Todo{Text: "Ceci est un 3eme exemple", Done: true})
 	*/
-	fmt.Printf("DEBUG : read todo list\n")
 }
 
 func saveTodoList() {
@@ -311,4 +328,22 @@ func registerWidget(w Widget) {
 func getWidgetByName(n string) (val Widget, ok bool) {
 	val, ok = widgets[n]
 	return val, ok
+}
+
+func chooseClassDone(entry *gtk.Entry, done bool) {
+	styleContext, _ := entry.GetStyleContext()
+	if done {
+		styleContext.AddClass("done")
+	} else {
+		styleContext.RemoveClass("done")
+	}
+}
+
+func chooseClassBeingEdited(entry *gtk.Entry, beingEdited bool) {
+	styleContext, _ := entry.GetStyleContext()
+	if beingEdited {
+		styleContext.AddClass("beingEdited")
+	} else {
+		styleContext.RemoveClass("beingEdited")
+	}
 }
