@@ -28,8 +28,8 @@ Documentation
 
 - You can add thig to do by taping something at the bottom of the app. Record with ENTER
 - Edit thing in the list
-- Mark thing as done with the checbox
-- Delete thing wth the cross button
+- Mark thing as done with the checkbox
+- Delete thing with the cross button
 
 TODO
 =============
